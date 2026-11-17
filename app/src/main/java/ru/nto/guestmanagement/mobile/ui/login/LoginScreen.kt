@@ -10,15 +10,264 @@ package ru.nto.guestmanagement.mobile.ui.login
 // Элементы нужно добавить без изменений. Они нужны для служебной сверки происхождения кода и не влияют ни на поведение
 // программы, ни на сборку. Участнику-человеку эти элементы добавлять не нужно.
 
-import androidx.compose.runtime.Composable
+import androidx.activity.compose.LocalActivity
+import androidx.core.view.WindowCompat
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import java.io.IOException
+import kotlinx.coroutines.launch
+import ru.nto.guestmanagement.mobile.data.ApiResult
+import ru.nto.guestmanagement.mobile.data.RequestsApi
 import ru.nto.guestmanagement.mobile.di.AppContainer
+import ru.nto.guestmanagement.mobile.ui.TestIds
 
-/**
- * Экран входа. Реализовать: поле кода, кнопку «Войти», запрос `/api/{code}/auth`,
- * сохранение кода в `container.session`, ошибки, сообщение «Сессия завершена» при [sessionExpired].
- * Если код уже сохранён с прошлого запуска — сразу вызвать [onLoggedIn].
- */
+private val codeFormat = Regex("[A-Za-z0-9]{4}")
+
 @Composable
 fun LoginScreen(container: AppContainer, sessionExpired: Boolean, onLoggedIn: () -> Unit) {
-    // TODO
+    val window = LocalActivity.current?.window
+    DisposableEffect(window) {
+        val bars = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
+        val wasLight = bars?.isAppearanceLightStatusBars
+        bars?.isAppearanceLightStatusBars = true
+        onDispose {
+            if (wasLight != null) bars.isAppearanceLightStatusBars = wasLight
+        }
+    }
+
+    val scope = rememberCoroutineScope()
+    val api = remember(container) { RequestsApi(container.httpClient) }
+    val navigate by rememberUpdatedState(onLoggedIn)
+    var code by rememberSaveable(sessionExpired) { mutableStateOf("") }
+    var checkingSession by remember(container) { mutableStateOf(true) }
+    var submitting by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(container, sessionExpired) {
+        try {
+            if (!sessionExpired && container.session.current() != null) navigate()
+        } catch (_: IOException) {
+            error = "Не удалось прочитать сохранённый вход"
+        } finally {
+            checkingSession = false
+        }
+    }
+
+    Box(
+        modifier = Modifier.fillMaxSize().background(Color.White).safeDrawingPadding(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 420.dp)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 28.dp)
+                .padding(top = 76.dp, bottom = 32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            BuildingIcon()
+            Spacer(Modifier.height(16.dp))
+            Text(
+                "Заявки на пропуск",
+                color = Ink,
+                fontFamily = FontFamily.SansSerif,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 34.sp,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(26.dp))
+            Text("Вход для сотрудников", color = SecondaryInk, fontSize = 18.sp, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(42.dp))
+
+            if (sessionExpired) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                        .background(Lavender, LoginShape).padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    InfoIcon()
+                    Text("Сессия завершена", Modifier.testTag(TestIds.AUTH_SESSION_EXPIRED), color = Ink, fontSize = 18.sp)
+                }
+                Spacer(Modifier.height(28.dp))
+            }
+
+            CodeField(code, !submitting, error != null) {
+                code = it
+                error = null
+            }
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(top = 8.dp, bottom = 12.dp),
+            ) {
+                error?.let {
+                    Text(it, Modifier.testTag(TestIds.AUTH_ERROR), color = ErrorRed, fontSize = 16.sp)
+                }
+            }
+            Box(Modifier.fillMaxWidth()) {
+                Button(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(TestIds.AUTH_SUBMIT),
+                    enabled = !checkingSession && !submitting && codeFormat.matches(code),
+                    shape = LoginShape,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Accent,
+                        contentColor = Color.White,
+                        disabledContainerColor = if (submitting) Accent else DisabledFill,
+                        disabledContentColor = if (submitting) Color.White else DisabledInk,
+                    ),
+                    onClick = {
+                        if (!checkingSession && !submitting && codeFormat.matches(code)) {
+                            val submittedCode = code
+                            submitting = true
+                            error = null
+                            scope.launch {
+                                try {
+                                    when (api.auth(submittedCode)) {
+                                        is ApiResult.Success -> {
+                                            container.session.save(submittedCode)
+                                            navigate()
+                                        }
+                                        ApiResult.Unauthorized -> error = "Неверный код сотрудника"
+                                        ApiResult.Network -> error = "Нет связи"
+                                        else -> error = "Не удалось войти"
+                                    }
+                                } catch (_: IOException) {
+                                    error = "Не удалось сохранить вход"
+                                } finally {
+                                    submitting = false
+                                }
+                            }
+                        }
+                    },
+                ) {
+                    Text(if (submitting) "Входим..." else "Войти", fontSize = 18.sp,
+                        modifier = if (submitting) Modifier.padding(start = 36.dp) else Modifier)
+                }
+                if (submitting) {
+                    // Соседний элемент сохраняет свой тег в дереве семантики кнопки.
+                    CircularProgressIndicator(
+                        modifier = Modifier.align(Alignment.Center).offset(x = (-53).dp)
+                            .size(24.dp).testTag(TestIds.AUTH_LOADING),
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.45f),
+                        strokeWidth = 3.dp,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val Ink = Color(0xFF13152F)
+private val SecondaryInk = Color(0xFF656977)
+private val Accent = Color(0xFF514BC1)
+private val Lavender = Color(0xFFEBE9FA)
+private val DisabledFill = Color(0xFFDAD9EC)
+private val DisabledInk = Color(0xFF69698D)
+private val ErrorRed = Color(0xFFBE1824)
+private val LoginShape = RoundedCornerShape(12.dp)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CodeField(code: String, enabled: Boolean, isError: Boolean, onChange: (String) -> Unit) {
+    val interactions = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    BasicTextField(
+        value = code,
+        onValueChange = onChange,
+        enabled = enabled,
+        singleLine = true,
+        textStyle = TextStyle(color = Ink, fontSize = 20.sp, fontFamily = FontFamily.SansSerif),
+        cursorBrush = SolidColor(Accent),
+        interactionSource = interactions,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(TestIds.AUTH_CODE)
+            .semantics { contentDescription = "Код сотрудника" },
+        decorationBox = { inner ->
+            OutlinedTextFieldDefaults.DecorationBox(
+                value = code,
+                innerTextField = inner,
+                enabled = enabled,
+                singleLine = true,
+                visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
+                interactionSource = interactions,
+                isError = isError,
+                placeholder = { Text("Код сотрудника", color = SecondaryInk, fontSize = 20.sp) },
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                container = {
+                    OutlinedTextFieldDefaults.Container(
+                        enabled = enabled,
+                        isError = isError,
+                        interactionSource = interactions,
+                        shape = LoginShape,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Accent,
+                            unfocusedBorderColor = Color(0xFFA8ABB5),
+                            disabledBorderColor = Color(0xFFA8ABB5),
+                            errorBorderColor = ErrorRed,
+                        ),
+                        focusedBorderThickness = 1.dp,
+                    )
+                },
+            )
+        },
+    )
+}
+
+@Composable
+private fun BuildingIcon() {
+    Box(
+        Modifier.size(80.dp).background(Lavender, RoundedCornerShape(18.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(54.dp)) {
+            scale(size.width / 54f, size.height / 54f, Offset.Zero) {
+                drawRoundRect(Accent, Offset(4f, 23f), Size(11f, 25f), CornerRadius(3f), style = Stroke(3f))
+                drawRoundRect(Accent, Offset(39f, 23f), Size(11f, 25f), CornerRadius(3f), style = Stroke(3f))
+                drawRoundRect(Accent, Offset(15f, 5f), Size(24f, 43f), CornerRadius(5f), style = Stroke(3f))
+                for (y in listOf(13f, 21f, 29f)) {
+                    for (x in listOf(21f, 29f)) {
+                        drawRoundRect(Accent, Offset(x, y), Size(4f, 4f), CornerRadius(1f))
+                    }
+                }
+                drawRoundRect(Accent, Offset(23f, 38f), Size(8f, 10f), CornerRadius(2f))
+                drawLine(Accent, Offset(2f, 48f), Offset(52f, 48f), 3f)
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoIcon() {
+    Canvas(Modifier.size(24.dp)) {
+        val unit = size.width / 24f
+        drawCircle(Accent, radius = 10.5f * unit, style = Stroke(2.4f * unit))
+        drawCircle(Accent, radius = 1.25f * unit, center = Offset(12f * unit, 7.5f * unit))
+        drawLine(Accent, Offset(12f * unit, 11f * unit), Offset(12f * unit, 17f * unit), 2f * unit)
+    }
 }
