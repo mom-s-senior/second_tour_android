@@ -3,10 +3,8 @@ package ru.nto.guestmanagement.mobile.ui.login
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -18,15 +16,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -162,18 +156,23 @@ fun LoginScreen(container: AppContainer, sessionExpired: Boolean, onLoggedIn: ()
                     ),
                     onClick = ::submitCode,
                 ) {
-                    Text(if (submitting) "Входим..." else "Войти", fontSize = 18.sp,
-                        modifier = if (submitting) Modifier.padding(start = 36.dp) else Modifier)
+                    if (!submitting) Text("Войти", fontSize = 18.sp)
                 }
                 if (submitting) {
-                    // Соседний элемент сохраняет свой тег в дереве семантики кнопки.
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center).offset(x = (-53).dp)
-                            .size(24.dp).testTag(TestIds.AUTH_LOADING),
-                        color = Color.White,
-                        trackColor = Color.White.copy(alpha = 0.45f),
-                        strokeWidth = 3.dp,
-                    )
+                    // Индикатор вне кнопки, чтобы его тег оставался доступен тестам.
+                    Row(
+                        modifier = Modifier.align(Alignment.Center).padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp).testTag(TestIds.AUTH_LOADING),
+                            color = Color.White,
+                            trackColor = Color.White.copy(alpha = 0.45f),
+                            strokeWidth = 3.dp,
+                        )
+                        Text("Входим...", color = Color.White, fontSize = 18.sp)
+                    }
                 }
             }
         }
@@ -189,48 +188,34 @@ private val DisabledInk = Color(0xFF69698D)
 private val ErrorRed = Color(0xFFBE1824)
 private val LoginShape = RoundedCornerShape(12.dp)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CodeField(code: String, enabled: Boolean, isError: Boolean, onChange: (String) -> Unit) {
-    val interactions = remember { MutableInteractionSource() }
-    BasicTextField(
+    OutlinedTextField(
         value = code,
         onValueChange = onChange,
+        label = { Text("Код сотрудника") },
         enabled = enabled,
         singleLine = true,
-        textStyle = TextStyle(color = Ink, fontSize = 18.sp, fontFamily = FontFamily.SansSerif),
-        cursorBrush = SolidColor(Accent),
-        interactionSource = interactions,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(TestIds.AUTH_CODE)
-            .semantics { contentDescription = "Код сотрудника" },
-        decorationBox = { inner ->
-            OutlinedTextFieldDefaults.DecorationBox(
-                value = code,
-                innerTextField = inner,
-                enabled = enabled,
-                singleLine = true,
-                visualTransformation = VisualTransformation.None,
-                interactionSource = interactions,
-                isError = isError,
-                placeholder = { Text("Код сотрудника", color = SecondaryInk, fontSize = 18.sp) },
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
-                container = {
-                    OutlinedTextFieldDefaults.Container(
-                        enabled = enabled,
-                        isError = isError,
-                        interactionSource = interactions,
-                        shape = LoginShape,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Accent,
-                            unfocusedBorderColor = Color(0xFFA8ABB5),
-                            disabledBorderColor = Color(0xFFA8ABB5),
-                            errorBorderColor = ErrorRed,
-                        ),
-                        focusedBorderThickness = 1.dp,
-                    )
-                },
-            )
-        },
+        isError = isError,
+        textStyle = TextStyle(fontSize = 18.sp, fontFamily = FontFamily.SansSerif),
+        shape = LoginShape,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(TestIds.AUTH_CODE),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Ink,
+            unfocusedTextColor = Ink,
+            disabledTextColor = Ink,
+            errorTextColor = Ink,
+            focusedLabelColor = Accent,
+            unfocusedLabelColor = SecondaryInk,
+            disabledLabelColor = SecondaryInk,
+            errorLabelColor = ErrorRed,
+            cursorColor = Accent,
+            errorCursorColor = ErrorRed,
+            focusedBorderColor = Accent,
+            unfocusedBorderColor = Color(0xFFA8ABB5),
+            disabledBorderColor = Color(0xFFA8ABB5),
+            errorBorderColor = ErrorRed,
+        ),
     )
 }
 

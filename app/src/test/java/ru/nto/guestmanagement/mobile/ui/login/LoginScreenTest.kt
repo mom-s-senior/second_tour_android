@@ -3,6 +3,7 @@ package ru.nto.guestmanagement.mobile.ui.login
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -79,14 +80,15 @@ class LoginScreenTest {
         node("auth_submit").assertIsDisplayed().assertIsNotEnabled()
         for (invalid in listOf("aB7", "aB789", "a B7", "Аб12")) {
             node("auth_code").performTextReplacement(invalid)
-            node("auth_code").assertTextEquals(invalid)
+            assertCode(invalid)
             node("auth_submit").assertIsNotEnabled()
         }
         for (valid in listOf("aB7Z", "1234", "AbCd")) {
             node("auth_code").performTextReplacement(valid)
-            node("auth_code").assertTextEquals(valid)
+            assertCode(valid)
             waitEnabled()
         }
+        ui.onNodeWithText("Код сотрудника").assertIsDisplayed()
         node("auth_loading").assertDoesNotExist()
         node("auth_error").assertDoesNotExist()
         assertTrue(requests.isEmpty())
@@ -137,7 +139,7 @@ class LoginScreenTest {
         show()
         submit("xY8Z")
         waitError("Нет связи")
-        node("auth_code").assertTextEquals("xY8Z")
+        assertCode("xY8Z")
         node("auth_submit").assertIsEnabled()
         node("auth_loading").assertDoesNotExist()
         assertNull(runBlocking { container.session.current() })
@@ -202,8 +204,7 @@ class LoginScreenTest {
         ui.waitForIdle()
         runBlocking { container.session.clear() }
         ui.runOnIdle { visible.value = true }
-        node("auth_code").assertIsDisplayed()
-            .assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
+        assertCode("")
         node("auth_submit").assertIsNotEnabled()
         node("auth_session_expired").assertDoesNotExist()
         assertEquals(1, loggedIn.get())
@@ -215,6 +216,11 @@ class LoginScreenTest {
     }
 
     private fun node(tag: String) = ui.onNodeWithTag(tag)
+
+    private fun assertCode(code: String) {
+        node("auth_code").assertIsDisplayed()
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString(code)))
+    }
 
     private fun submit(code: String) {
         node("auth_code").performTextReplacement(code)
