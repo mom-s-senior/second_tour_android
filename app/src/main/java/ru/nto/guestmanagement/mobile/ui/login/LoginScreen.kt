@@ -116,13 +116,13 @@ fun LoginScreen(container: AppContainer, sessionExpired: Boolean, onLoggedIn: ()
                 "Заявки на пропуск",
                 color = Ink,
                 fontFamily = FontFamily.SansSerif,
-                fontSize = 28.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 lineHeight = 34.sp,
                 textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(26.dp))
-            Text("Вход для сотрудников", color = SecondaryInk, fontSize = 18.sp, textAlign = TextAlign.Center)
+            Text("Вход для сотрудников", color = SecondaryInk, fontSize = 16.sp, textAlign = TextAlign.Center)
             Spacer(Modifier.height(42.dp))
 
             if (sessionExpired) {
@@ -198,7 +198,7 @@ private fun CodeField(code: String, enabled: Boolean, isError: Boolean, onChange
         onValueChange = onChange,
         enabled = enabled,
         singleLine = true,
-        textStyle = TextStyle(color = Ink, fontSize = 20.sp, fontFamily = FontFamily.SansSerif),
+        textStyle = TextStyle(color = Ink, fontSize = 18.sp, fontFamily = FontFamily.SansSerif),
         cursorBrush = SolidColor(Accent),
         interactionSource = interactions,
         modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(TestIds.AUTH_CODE)
@@ -212,7 +212,7 @@ private fun CodeField(code: String, enabled: Boolean, isError: Boolean, onChange
                 visualTransformation = VisualTransformation.None,
                 interactionSource = interactions,
                 isError = isError,
-                placeholder = { Text("Код сотрудника", color = SecondaryInk, fontSize = 20.sp) },
+                placeholder = { Text("Код сотрудника", color = SecondaryInk, fontSize = 18.sp) },
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
                 container = {
                     OutlinedTextFieldDefaults.Container(
